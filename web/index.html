@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Market Wall</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="brand"><span class="logo">Market Wall</span><span class="clock" id="clock"></span></div>
+      <div class="views"><span class="title" id="vtitle">Loading…</span><div class="dots" id="dots"></div></div>
+      <div class="status" id="status"></div>
+    </header>
+    <div class="progress" id="progress"></div>
+    <main id="main"><div class="empty-state"><h2>Loading market data…</h2><p>The first build fetches ~30 price histories and a year of headlines. It takes a minute or two.</p></div></main>
+    <footer><div class="tape" id="tape"></div></footer>
+  </div>
+  <button class="nav" id="prev" aria-label="Previous view">‹</button>
+  <button class="nav" id="next" aria-label="Next view">›</button>
+  <div id="tip"></div>
+  <script src="app.js"></script>
+</body>
+</html>

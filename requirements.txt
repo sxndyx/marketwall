@@ -1,0 +1,1 @@
+yfinance>=0.2.50   # optional but recommended: more robust Yahoo access + per-ticker headlines
