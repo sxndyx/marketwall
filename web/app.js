@@ -492,6 +492,7 @@ function vLongterm(part = 0) {
 
 function vNews() {
   const d = D(), gs = d.groups.filter((g) => g.news);
+  if (!gs.length && d.status.news_pending) return pendingNews("Sector news tone");
   if (!gs.length) {
     return `<div class="empty-state"><div class="kicker">News pulse</div><h2>No headlines yet</h2>
       <p>Headline tone comes from Google News RSS (<code>news.google.com</code>), one query per sector per month, plus <code>yfinance</code> ticker news.
@@ -551,6 +552,11 @@ function vModel() {
 }
 
 /* ------------------------------------------------------------------ sentiment & events */
+function pendingNews(title) {
+  return `<div class="empty-state"><div class="kicker">${esc(title)}</div><h2>Loading headlines…</h2>
+    <p>The first run fetches a year of sector headlines and 90 days of news coverage, which takes a few minutes. This page fills in by itself.</p></div>`;
+}
+
 function monthTicks(dates, every = 2) {
   const out = [];
   let last = "";
@@ -633,6 +639,7 @@ const STATUS = { Spike: ["⚡", "var(--crit)"], Elevated: ["▲", "var(--warn)"]
 
 function vEvents() {
   const r = D().radar, st = D().status;
+  if (!r && st.news_pending) return pendingNews("News & events radar");
   if (!r) {
     return `<div class="empty-state"><div class="kicker">News & events radar</div><h2>No news coverage data yet</h2>
       <p>Coverage and tone come from the GDELT global news database (<code>api.gdeltproject.org</code>), with Google News as a fallback for headlines.</p>
@@ -736,7 +743,7 @@ function renderStatus() {
   $("#status").innerHTML = `${sv ? `<span class="pill" data-tip="Market sentiment gauge: 0 = extreme fear, 100 = extreme greed"><i style="background:${divColor(sv.value - 50, 50)}"></i>Sentiment ${Math.round(sv.value)} · ${esc(sv.zone)}</span>` : ""}
     <span>Data to ${esc(asof)}</span>
     <span class="pill" data-tip="${esc(st.missing.length ? (st.hint ? st.hint + " " : "") + "Not loaded: " + st.missing.join(", ") : "All series loaded")}"><i style="background:${ok ? "var(--good)" : "var(--warn)"}"></i>${st.loaded}/${st.total} series</span>
-    <span class="pill" data-tip="${esc(st.news_error || "")}"><i style="background:${newsOk ? "var(--good)" : "var(--warn)"}"></i>${newsOk ? `news ${st.news_groups}/${st.news_total}` : "news offline"}</span>`;
+    <span class="pill" data-tip="${esc(st.news_error || "")}"><i style="background:${newsOk ? "var(--good)" : "var(--warn)"}"></i>${newsOk ? `news ${st.news_groups}/${st.news_total}` : st.news_pending ? "news loading…" : "news offline"}</span>`;
   const tape = Object.values(d.instruments).filter((i) => i.sym !== "SPY").map((i) => {
     const ch = i.snap.d1 ?? i.snap.m1, lab = i.snap.d1 != null ? "1D" : "1M";
     return `<span><b>${esc(i.name)}</b>${px(i.snap.price)} ${delta(ch)} <span class="muted">${lab}</span></span>`;
@@ -779,7 +786,11 @@ async function load() {
     const r = await fetch("/api/data", { cache: "no-store" });
     if (r.status === 503) {
       const st = await (await fetch("/api/status")).json();
-      $("#main").innerHTML = `<div class="empty-state"><h2>Building the first data snapshot…</h2><p class="small muted" style="text-align:left;white-space:pre-line">${esc((st.log || []).slice(-8).join("\n"))}</p></div>`;
+      const el = st.elapsed != null ? ` · ${Math.floor(st.elapsed / 60)}:${String(st.elapsed % 60).padStart(2, "0")}` : "";
+      $("#main").innerHTML = `<div class="empty-state"><h2>Building the first data snapshot${el}</h2>
+        <p class="ink2">Prices load first (about a minute); the wall appears as soon as they're in, and headlines fill in after.</p>
+        ${st.last_error ? `<p><b>Build failed:</b> ${esc(st.last_error)}</p>` : ""}
+        <p class="small muted" style="text-align:left;white-space:pre-line">${esc((st.log || []).slice(-10).join("\n")) || "Starting…"}</p></div>`;
       setTimeout(load, 3000);
       return;
     }
@@ -797,7 +808,7 @@ async function load() {
     console.error(e);
     if (!S.data) $("#main").innerHTML = `<div class="empty-state"><h2>Can't reach the data server</h2><p>Start it with <code>python3 server.py</code>.</p></div>`;
   }
-  setTimeout(load, 5 * 60 * 1000);
+  setTimeout(load, S.data?.status?.news_pending ? 20000 : 5 * 60 * 1000);
 }
 
 /* ------------------------------------------------------------------ events */

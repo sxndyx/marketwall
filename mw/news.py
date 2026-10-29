@@ -197,6 +197,8 @@ def collect(groups, cache_dir, months=12, log=print, today=None, errors=None):
                 seen.add(key)
                 i["score"] = round(score_headline(i["title"]), 3)
                 uniq.append(i)
+        if failures < 3:
+            log(f"sector headlines: {g.get('name', g['id'])} ({len(uniq)})")
         if not uniq:
             continue
         uniq.sort(key=lambda i: i["date"], reverse=True)

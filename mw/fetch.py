@@ -13,6 +13,7 @@ import shutil
 import ssl
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -253,17 +254,25 @@ def fetch_instrument(sym, meta, log, sink=None):
 def fetch_all(instruments, cache_dir, max_age_h=6, log=print, errors=None):
     """Fetch every instrument, reusing cached copies younger than max_age_h."""
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out = {}
-    for sym, meta in instruments.items():
+    t0, done, total = time.time(), [0], len(instruments)
+
+    def one(item):
+        sym, meta = item
         path = cache_dir / ("px3_" + "".join(ch if ch.isalnum() else "_" for ch in sym) + ".json")
         if path.exists() and time.time() - path.stat().st_mtime < max_age_h * 3600:
-            out[sym] = json.loads(path.read_text())
-            continue
+            return sym, json.loads(path.read_text())
         data = fetch_instrument(sym, meta, log, errors)
+        done[0] += 1
         if data:
             path.write_text(json.dumps(data))
-            out[sym] = data
-        elif path.exists():  # stale beats nothing
-            out[sym] = json.loads(path.read_text()) | {"stale": True}
-        time.sleep(0.25)
+            log(f"prices {done[0]}: {sym} ({data['source']}, from {data['monthly'][0][0]})")
+            return sym, data
+        if path.exists():  # stale beats nothing
+            return sym, json.loads(path.read_text()) | {"stale": True}
+        return sym, None
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        out = {sym: data for sym, data in pool.map(one, instruments.items()) if data}
+    if done[0]:
+        log(f"prices: {len(out)}/{total} loaded ({done[0]} downloaded) in {time.time() - t0:.0f}s")
     return out

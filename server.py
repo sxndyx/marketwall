@@ -22,30 +22,39 @@ WEB = ROOT / "web"
 CACHE = ROOT / "cache"
 DATA = CACHE / "data.json"
 
-state = {"building": False, "last_error": None, "log": []}
+state = {"building": False, "last_error": None, "log": [], "started": None}
 lock = threading.Lock()
+log_lock = threading.Lock()
 
 
 def log(msg):
     line = f"{time.strftime('%H:%M:%S')} {msg}"
-    print(line, flush=True)
-    state["log"] = (state["log"] + [line])[-200:]
+    with log_lock:
+        print(line, flush=True)
+        state["log"] = (state["log"] + [line])[-200:]
+
+
+def write(data, t0):
+    data["build_seconds"] = round(time.time() - t0, 1)
+    tmp = DATA.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, separators=(",", ":")))
+    tmp.replace(DATA)
+    log(f"built {DATA.name}: {data['status']['loaded']}/{data['status']['total']} instruments, "
+        f"news for {data['status']['news_groups']} sectors, {data['build_seconds']}s")
 
 
 def rebuild():
     if not lock.acquire(blocking=False):
         return
     state["building"] = True
+    state["started"] = time.time()
     try:
         t0 = time.time()
-        data = build(CACHE, log=log)
-        data["build_seconds"] = round(time.time() - t0, 1)
-        tmp = DATA.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, separators=(",", ":")))
-        tmp.replace(DATA)
+        if not DATA.exists():
+            log("first run: loading prices first; headlines and the news radar follow (a few minutes)")
+            write(build(CACHE, log=log, with_news=False), t0)
+        write(build(CACHE, log=log), t0)
         state["last_error"] = None
-        log(f"built {DATA.name}: {data['status']['loaded']}/{data['status']['total']} instruments, "
-            f"news for {data['status']['news_groups']} sectors, {data['build_seconds']}s")
     except Exception as e:  # noqa: BLE001
         state["last_error"] = f"{type(e).__name__}: {e}"
         log(f"build failed: {state['last_error']}")
@@ -94,7 +103,8 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({"pending": True, "building": state["building"], "error": state["last_error"]}, 503)
             return
         if self.path.startswith("/api/status"):
-            self._json({k: state[k] for k in ("building", "last_error")} | {"log": state["log"][-40:]})
+            elapsed = round(time.time() - state["started"]) if state["started"] and state["building"] else None
+            self._json({k: state[k] for k in ("building", "last_error")} | {"log": state["log"][-40:], "elapsed": elapsed})
             return
         if self.path.startswith("/api/refresh"):
             threading.Thread(target=rebuild, daemon=True).start()

@@ -172,7 +172,8 @@ def sentiment_actionables(sent, radar):
     return out
 
 
-def build(cache_dir, today=None, log=print):
+def build(cache_dir, today=None, log=print, with_news=True):
+    """with_news=False skips headlines and the news radar so a first build can show prices quickly."""
     today = today or dt.date.today()
     errors = []
     prices = fetch_all(INSTRUMENTS, cache_dir, log=log, errors=errors)
@@ -184,7 +185,7 @@ def build(cache_dir, today=None, log=print):
                 series[sym] = s
         except Exception as e:  # noqa: BLE001
             log(f"{sym}: bad series ({e})")
-    news = collect(GROUPS, cache_dir, log=log, today=today, errors=errors)
+    news = collect(GROUPS, cache_dir, log=log, today=today, errors=errors) if with_news else {}
 
     sent = None
     try:
@@ -196,7 +197,7 @@ def build(cache_dir, today=None, log=print):
         log(f"sentiment failed: {type(e).__name__}: {e}")
     radar = None
     try:
-        radar = evr.collect(cache_dir, log=log, today=today, errors=errors)
+        radar = evr.collect(cache_dir, log=log, today=today, errors=errors) if with_news else None
     except Exception as e:  # noqa: BLE001
         log(f"events radar failed: {type(e).__name__}: {e}")
 
@@ -333,6 +334,7 @@ def build(cache_dir, today=None, log=print):
         "radar": radar,
         "status": {"loaded": len(inst_out), "total": len(INSTRUMENTS), "missing": missing, "sources": sources,
                    "news_groups": len(news), "news_total": len(GROUPS),
+                   "news_pending": not with_news,
                    "errors": [e for e in errors if not e.startswith(("news:", "events:"))][:8],
                    "hint": diagnose(errors),
                    "news_error": next((e[6:] for e in errors if e.startswith("news:")), None),

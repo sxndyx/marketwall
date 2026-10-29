@@ -127,6 +127,8 @@ def collect(cache_dir, log=print, today=None, errors=None):
     state = {"fail": 0, "calls": 0, "error": None}
     themes = []
     for th in THEMES:
+        if state["fail"] < 2:
+            log(f"news radar: {th['name']}")
         q = th["gdelt"]
         vol = _cached(cache_dir, f"ev_{th['id']}_vol.json", 3 * 3600,
                       lambda: daily_timeline(gdelt(q, "timelinevol", timelinesmooth=0)), state, log) or []
